@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RMS KOL Performance & Correlation Tool</title>
+<style>
+  :root {
+    --bk: #0A0A0A;
+    --bk2: #141414;
+    --gd: #D4AF37;
+    --gd2: #F4D03F;
+    --wh: #FFFFFF;
+    --gy: #9A9A9A;
+    --gr: #4ADE80;
+    --am: #FBBF24;
+    --rd: #F87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    background: var(--bk);
+    color: var(--wh);
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { color: var(--gd); font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--gy); font-size: 13px; margin-bottom: 20px; }
+  .panel {
+    background: var(--bk2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  input[type="text"], input[type="password"] {
+    background: #1f1f1f;
+    border: 1px solid #333;
+    color: var(--wh);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 320px;
+  }
+  button {
+    background: var(--gd);
+    color: var(--bk);
+    border: none;
+    padding: 9px 18px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 13px;
+    margin-left: 8px;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: #2a2a2a;
+    color: var(--wh);
+  }
+  #status { font-size: 12px; color: var(--gy); margin-top: 8px; min-height: 18px; }
+  .progressbar {
+    height: 6px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+    display: none;
+  }
+  .progressbar.active { display: block; }
+  .progressbar-fill {
+    height: 100%;
+    background: var(--gd);
+    width: 0%;
+    transition: width 0.2s;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  th {
+    color: var(--gd);
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--gd2); }
+  th.sort-asc::after { content: " ▲"; }
+  th.sort-desc::after { content: " ▼"; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover { background: #1a1a1a; }
+  .verdict {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: bold;
+  }
+  .verdict.KEEP { background: #061A0F; color: var(--gr); border: 1px solid var(--gr); }
+  .verdict.WATCH { background: #1A1200; color: var(--am); border: 1px solid var(--am); }
+  .verdict.CUT { background: #1A0404; color: var(--rd); border: 1px solid var(--rd); }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab {
+    padding: 8px 16px;
+    background: #1f1f1f;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--gy);
+  }
+  .tab.active { background: var(--bk2); color: var(--gd); font-weight: bold; }
+  .tabcontent { display: none; }
+  .tabcontent.active { display: block; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-box {
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat-box .v { font-size: 22px; font-weight: bold; color: var(--gd); }
+  .stat-box .l { font-size: 11px; color: var(--gy); margin-top: 4px; }
+  .game-group {
+    margin-bottom: 16px;
+  }
+  .game-group h3 {
+    color: var(--gd2);
+    font-size: 14px;
+    margin: 0 0 8px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .game-summary {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--gy);
+    margin-bottom: 6px;
+  }
+  .err-row { color: var(--rd); font-size: 11px; }
+  .small-link { color: var(--gd); text-decoration: none; font-size: 11px; }
+  .small-link:hover { text-decoration: underline; }
+  #exportBtn { margin-top: 12px; }
+  .note {
+    font-size: 11px;
+    color: var(--gy);
+    font-style: italic;
+    margin-top: 8px;
+  }
+  .channel-cell { display: flex; flex-direction: column; }
+  .channel-cell .game-tag { font-size: 10px; color: var(--gy); }
+</style>
+</head>
+<body>
+
+<h1>RMS · KOL Performance & Sales Correlation Tool</h1>
+<div class="sub">Fetches YouTube channel & recent video stats for the 83 matched KOLs (of 101 active TH contracts) and maps reach against KEEP / WATCH / CUT verdicts and game categories.</div>
+
+<div class="panel">
+  <label for="apiKey" style="font-size:13px; display:block; margin-bottom:6px;">Google API Key (YouTube Data API v3 enabled):</label>
+  <input type="password" id="apiKey" placeholder="AIza...">
+  <button id="fetchBtn" onclick="startFetch()">Fetch All (83 channels)</button>
+  <button class="secondary" onclick="loadCache()">Load Cached Results</button>
+  <div class="progressbar" id="progressbar"><div class="progressbar-fill" id="progressfill"></div></div>
+  <div id="status">Enter your API key and click Fetch All. Channel-level calls: ~83 units. Video-level calls: ~250-350 units. Well within the 10,000/day free quota.</div>
+</div>
+
+<div id="results" style="display:none;">
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('table')">All Channels</div>
+  <div class="tab" onclick="switchTab('bygame')">By Game</div>
+  <div class="tab" onclick="switchTab('byverdict')">By Verdict</div>
+</div>
+
+<div class="tabcontent active" id="tab-overview">
+  <div class="stat-grid" id="overviewStats"></div>
+  <div class="panel">
+    <h3 style="color:var(--gd2); margin-top:0;">Top 10 by Avg Views / Recent Video</h3>
+    <table id="topViewsTable"><thead><tr><th>Channel</th><th>Verdict</th><th>Game</th><th class="num">Subs</th><th class="num">Avg Views</th><th class="num">Spend/mo</th><th class="num">฿/1K views</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="panel">
+    <h3 style="color:var(--rd); margin-top:0;">Highest ฿/1K views (least efficient reach)</h3>
+    <table id="worstEffTable"><thead><tr><th>Channel</th><th>Verdict</th><th>Game</th><th class="num">Subs</th><th class="num">Avg Views</th><th class="num">Spend/mo</th><th class="num">฿/1K views</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<div class="tabcontent" id="tab-table">
+  <div class="panel">
+    <table id="allTable">
+      <thead><tr>
+        <th onclick="sortTable('all',0)">Channel</th>
+        <th onclick="sortTable('all',1)">Verdict</th>
+        <th onclick="sortTable('all',2)" class="num">Subscribers</th>
+        <th onclick="sortTable('all',3)" class="num">Total Views</th>
+        <th onclick="sortTable('all',4)" class="num">Videos Checked</th>
+        <th onclick="sortTable('all',5)" class="num">Avg Views/Video</th>
+        <th onclick="sortTable('all',6)" class="num">Avg Engagement %</th>
+        <th onclick="sortTable('all',7)" class="num">Spend/mo (฿)</th>
+        <th onclick="sortTable('all',8)" class="num">฿ / 1K Views</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="exportBtn" onclick="exportCSV()">Export CSV</button>
+  </div>
+</div>
+
+<div class="tabcontent" id="tab-bygame">
+  <div id="byGameContainer"></div>
+</div>
+
+<div class="tabcontent" id="tab-byverdict">
+  <div id="byVerdictContainer"></div>
+</div>
+
+</div>
+
+<script src="roster.js"></script>
+<script>
+let RESULTS = [];
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tabcontent').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function setProgress(pct) {
+  const bar = document.getElementById('progressbar');
+  const fill = document.getElementById('progressfill');
+  if (pct >= 100 || pct <= 0) {
+    bar.classList.toggle('active', pct > 0 && pct < 100);
+  } else {
+    bar.classList.add('active');
+  }
+  fill.style.width = pct + '%';
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  return data;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function startFetch() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { alert('Please enter your Google API key.'); return; }
+
+  document.getElementById('fetchBtn').disabled = true;
+  RESULTS = [];
+  const total = ROSTER.length;
+  let done = 0;
+
+  for (const kol of ROSTER) {
+    setStatus(`Fetching ${kol.name} (${done+1}/${total})...`);
+    setProgress(Math.round((done / total) * 100));
+    try {
+      const result = await fetchChannel(kol, apiKey);
+      RESULTS.push(result);
+    } catch (e) {
+      RESULTS.push({ ...kol, error: e.message, subs: null, totalViews: null, videosChecked: 0, avgViews: 0, avgEngagement: 0, costPer1k: null });
+      console.error(kol.name, e);
+    }
+    done++;
+    await sleep(150);
+  }
+
+  setProgress(100);
+  setStatus(`Done. Fetched ${done} channels. ${RESULTS.filter(r=>r.error).length} errors.`);
+  localStorage.setItem('rms_kol_results', JSON.stringify(RESULTS));
+  document.getElementById('fetchBtn').disabled = false;
+  renderResults();
+}
+
+function loadCache() {
+  const cached = localStorage.getItem('rms_kol_results');
+  if (!cached) { alert('No cached results found. Run a fetch first.'); return; }
+  RESULTS = JSON.parse(cached);
+  setStatus(`Loaded ${RESULTS.length} cached results.`);
+  renderResults();
+}
+
+async function fetchChannel(kol, apiKey) {
+  // Step 1: get channel stats + uploads playlist
+  let channelUrl;
+  if (kol.channelIdMode) {
+    channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${kol.handle}&key=${apiKey}`;
+  } else {
+    const handle = kol.handle.replace(/^@/, '');
+    channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&forHandle=${encodeURIComponent(handle)}&key=${apiKey}`;
+  }
+  const channelData = await fetchJSON(channelUrl);
+  if (!channelData.items || channelData.items.length === 0) {
+    throw new Error('Channel not found');
+  }
+  const item = channelData.items[0];
+  const subs = parseInt(item.statistics.subscriberCount || 0);
+  const totalViews = parseInt(item.statistics.viewCount || 0);
+  const uploadsPlaylist = item.contentDetails.relatedPlaylists.uploads;
+
+  // Step 2: get recent video IDs from uploads playlist (last 10)
+  const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylist}&maxResults=10&key=${apiKey}`;
+  const playlistData = await fetchJSON(playlistUrl);
+  const videoIds = (playlistData.items || []).map(i => i.contentDetails.videoId).filter(Boolean);
+
+  let avgViews = 0, avgEngagement = 0, videosChecked = 0;
+  if (videoIds.length > 0) {
+    const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds.join(',')}&key=${apiKey}`;
+    const videosData = await fetchJSON(videosUrl);
+    const vids = videosData.items || [];
+    videosChecked = vids.length;
+    if (videosChecked > 0) {
+      let sumViews = 0, sumEng = 0, engCount = 0;
+      for (const v of vids) {
+        const views = parseInt(v.statistics.viewCount || 0);
+        const likes = parseInt(v.statistics.likeCount || 0);
+        const comments = parseInt(v.statistics.commentCount || 0);
+        sumViews += views;
+        if (views > 0) {
+          sumEng += ((likes + comments) / views) * 100;
+          engCount++;
+        }
+      }
+      avgViews = sumViews / videosChecked;
+      avgEngagement = engCount > 0 ? sumEng / engCount : 0;
+    }
+  }
+
+  const costPer1k = (avgViews > 0 && kol.spend > 0) ? (kol.spend / (avgViews / 1000)) : null;
+
+  return {
+    ...kol,
+    subs, totalViews, videosChecked,
+    avgViews: Math.round(avgViews),
+    avgEngagement: Math.round(avgEngagement * 100) / 100,
+    costPer1k: costPer1k ? Math.round(costPer1k) : null,
+    error: null
+  };
+}
+
+function fmtNum(n) {
+  if (n === null || n === undefined) return '—';
+  return n.toLocaleString();
+}
+
+function fmtBaht(n) {
+  if (n === null || n === undefined) return '—';
+  return '฿' + n.toLocaleString();
+}
+
+function renderResults() {
+  document.getElementById('results').style.display = 'block';
+  renderOverview();
+  renderAllTable();
+  renderByGame();
+  renderByVerdict();
+}
+
+function renderOverview() {
+  const valid = RESULTS.filter(r => !r.error);
+  const totalSubs = valid.reduce((a,r) => a + (r.subs||0), 0);
+  const totalSpend = RESULTS.reduce((a,r) => a + (r.spend||0), 0);
+  const avgEng = valid.length ? (valid.reduce((a,r) => a + (r.avgEngagement||0), 0) / valid.length) : 0;
+  const withCost = valid.filter(r => r.costPer1k !== null);
+  const avgCost = withCost.length ? Math.round(withCost.reduce((a,r) => a + r.costPer1k, 0) / withCost.length) : 0;
+
+  document.getElementById('overviewStats').innerHTML = `
+    <div class="stat-box"><div class="v">${valid.length}/${RESULTS.length}</div><div class="l">Channels fetched OK</div></div>
+    <div class="stat-box"><div class="v">${fmtNum(totalSubs)}</div><div class="l">Combined subscribers</div></div>
+    <div class="stat-box"><div class="v">${avgEng.toFixed(2)}%</div><div class="l">Avg engagement rate</div></div>
+    <div class="stat-box"><div class="v">${fmtBaht(avgCost)}</div><div class="l">Avg ฿ / 1K views</div></div>
+  `;
+
+  const withViews = valid.filter(r => r.avgViews > 0).sort((a,b) => b.avgViews - a.avgViews);
+  const top10 = withViews.slice(0,10);
+  document.querySelector('#topViewsTable tbody').innerHTML = top10.map(r => `
+    <tr>
+      <td>${r.name}</td>
+      <td><span class="verdict ${r.verdict}">${r.verdict}</span></td>
+      <td style="font-size:11px;color:var(--gy)">${(r.game||'').split(',')[0].split('+')[0].trim()}</td>
+      <td class="num">${fmtNum(r.subs)}</td>
+      <td class="num">${fmtNum(r.avgViews)}</td>
+      <td class="num">${fmtBaht(r.spend)}</td>
+      <td class="num">${fmtBaht(r.costPer1k)}</td>
+    </tr>
+  `).join('');
+
+  const worstEff = withViews.filter(r => r.costPer1k !== null).sort((a,b) => b.costPer1k - a.costPer1k).slice(0,10);
+  document.querySelector('#worstEffTable tbody').innerHTML = worstEff.map(r => `
+    <tr>
+      <td>${r.name}</td>
+      <td><span class="verdict ${r.verdict}">${r.verdict}</span></td>
+      <td style="font-size:11px;color:var(--gy)">${(r.game||'').split(',')[0].split('+')[0].trim()}</td>
+      <td class="num">${fmtNum(r.subs)}</td>
+      <td class="num">${fmtNum(r.avgViews)}</td>
+      <td class="num">${fmtBaht(r.spend)}</td>
+      <td class="num">${fmtBaht(r.costPer1k)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderAllTable() {
+  const tbody = document.querySelector('#allTable tbody');
+  tbody.innerHTML = RESULTS.map(r => {
+    if (r.error) {
+      return `<tr>
+        <td>${r.name}</td>
+        <td><span class="verdict ${r.verdict}">${r.verdict}</span></td>
+        <td colspan="7" class="err-row">Error: ${r.error}</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td><div class="channel-cell">${r.name}<span class="game-tag">${(r.game||'').split(',')[0].split('+')[0].trim()}</span></div></td>
+      <td><span class="verdict ${r.verdict}">${r.verdict}</span></td>
+      <td class="num">${fmtNum(r.subs)}</td>
+      <td class="num">${fmtNum(r.totalViews)}</td>
+      <td class="num">${r.videosChecked}</td>
+      <td class="num">${fmtNum(r.avgViews)}</td>
+      <td class="num">${r.avgEngagement}%</td>
+      <td class="num">${fmtBaht(r.spend)}</td>
+      <td class="num">${fmtBaht(r.costPer1k)}</td>
+    </tr>`;
+  }).join('');
+}
+
+let sortState = {};
+function sortTable(id, colIdx) {
+  const table = document.getElementById(id === 'all' ? 'allTable' : id);
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const key = id + '_' + colIdx;
+  const asc = !sortState[key];
+  sortState = { [key]: asc };
+
+  rows.sort((a, b) => {
+    const aCell = a.children[colIdx];
+    const bCell = b.children[colIdx];
+    if (!aCell || !bCell) return 0;
+    let aVal = aCell.textContent.replace(/[฿,%]/g, '').trim();
+    let bVal = bCell.textContent.replace(/[฿,%]/g, '').trim();
+    const aNum = parseFloat(aVal), bNum = parseFloat(bVal);
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return asc ? aNum - bNum : bNum - aNum;
+    }
+    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+  });
+
+  rows.forEach(r => tbody.appendChild(r));
+
+  table.querySelectorAll('th').forEach((th, i) => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (i === colIdx) th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+  });
+}
+
+// Game grouping - map raw game strings to categories used in the deck
+function categorizeGame(gameStr) {
+  const g = (gameStr || '').toLowerCase();
+  if (g.includes('valorant')) return 'Valorant';
+  if (g.includes('mobile legends') || g.includes('mlbb')) return 'MLBB';
+  if (g.includes('free fire')) return 'Free Fire';
+  if (g.includes('arena of valor') || g.includes('rov')) return 'ROV';
+  if (g.includes('genshin') || g.includes('honkai') || g.includes('zenless') || g.includes('hoyoverse')) return 'HoYoverse';
+  if (g.includes('ragnarok')) return 'Ragnarok';
+  if (g.includes('pubg')) return 'PUBG Mobile';
+  if (g.includes('roblox')) return 'RoBlox';
+  if (g.includes('identity v')) return 'Identity V';
+  if (g.includes('league of legends') || g === 'lol pc (league of legends)') return 'League of Legends';
+  if (g.includes('teamfight') || g.includes('tft')) return 'TFT';
+  return 'Other';
+}
+
+function renderByGame() {
+  const groups = {};
+  for (const r of RESULTS) {
+    const cat = categorizeGame(r.game);
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(r);
+  }
+  const order = ['Valorant','MLBB','Free Fire','ROV','HoYoverse','Ragnarok','PUBG Mobile','RoBlox','Identity V','League of Legends','TFT','Other'];
+  let html = '';
+  for (const cat of order) {
+    if (!groups[cat]) continue;
+    const items = groups[cat].filter(r => !r.error);
+    const totalSpend = groups[cat].reduce((a,r) => a + (r.spend||0), 0);
+    const totalSubs = items.reduce((a,r) => a + (r.subs||0), 0);
+    const avgViews = items.length ? Math.round(items.reduce((a,r) => a + (r.avgViews||0), 0) / items.length) : 0;
+    const withCost = items.filter(r => r.costPer1k !== null);
+    const avgCost = withCost.length ? Math.round(withCost.reduce((a,r)=>a+r.costPer1k,0)/withCost.length) : null;
+
+    html += `<div class="game-group">
+      <h3>${cat} <span style="color:var(--gy);font-size:11px;font-weight:normal;">(${groups[cat].length} channels)</span></h3>
+      <div class="game-summary">
+        <span>Combined spend: ${fmtBaht(totalSpend)}/mo</span>
+        <span>Combined subs: ${fmtNum(totalSubs)}</span>
+        <span>Avg views/video: ${fmtNum(avgViews)}</span>
+        <span>Avg ฿/1K views: ${avgCost !== null ? fmtBaht(avgCost) : '—'}</span>
+      </div>
+      <table><thead><tr><th>Channel</th><th>Verdict</th><th class="num">Subs</th><th class="num">Avg Views</th><th class="num">Engagement %</th><th class="num">Spend/mo</th><th class="num">฿/1K</th></tr></thead><tbody>
+      ${groups[cat].sort((a,b)=>(b.spend||0)-(a.spend||0)).map(r => r.error ? `
+        <tr><td>${r.name}</td><td><span class="verdict ${r.verdict}">${r.verdict}</span></td><td colspan="5" class="err-row">Error: ${r.error}</td></tr>
+      ` : `
+        <tr>
+          <td>${r.name}</td>
+          <td><span class="verdict ${r.verdict}">${r.verdict}</span></td>
+          <td class="num">${fmtNum(r.subs)}</td>
+          <td class="num">${fmtNum(r.avgViews)}</td>
+          <td class="num">${r.avgEngagement}%</td>
+          <td class="num">${fmtBaht(r.spend)}</td>
+          <td class="num">${fmtBaht(r.costPer1k)}</td>
+        </tr>
+      `).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  document.getElementById('byGameContainer').innerHTML = html;
+}
+
+function renderByVerdict() {
+  const order = ['KEEP','WATCH','CUT'];
+  let html = '';
+  for (const v of order) {
+    const items = RESULTS.filter(r => r.verdict === v);
+    const valid = items.filter(r => !r.error);
+    const totalSpend = items.reduce((a,r) => a + (r.spend||0), 0);
+    const avgViews = valid.length ? Math.round(valid.reduce((a,r) => a + (r.avgViews||0), 0) / valid.length) : 0;
+    const withCost = valid.filter(r => r.costPer1k !== null);
+    const avgCost = withCost.length ? Math.round(withCost.reduce((a,r)=>a+r.costPer1k,0)/withCost.length) : null;
+    const avgSubs = valid.length ? Math.round(valid.reduce((a,r)=>a+(r.subs||0),0)/valid.length) : 0;
+
+    html += `<div class="game-group">
+      <h3><span class="verdict ${v}">${v}</span> <span style="color:var(--gy);font-size:11px;font-weight:normal;">(${items.length} channels, ${fmtBaht(totalSpend)}/mo)</span></h3>
+      <div class="game-summary">
+        <span>Avg subscribers: ${fmtNum(avgSubs)}</span>
+        <span>Avg views/video: ${fmtNum(avgViews)}</span>
+        <span>Avg ฿/1K views: ${avgCost !== null ? fmtBaht(avgCost) : '—'}</span>
+      </div>
+      <table><thead><tr><th>Channel</th><th>Game</th><th class="num">Subs</th><th class="num">Avg Views</th><th class="num">Engagement %</th><th class="num">Spend/mo</th><th class="num">฿/1K</th></tr></thead><tbody>
+      ${items.sort((a,b)=>(b.spend||0)-(a.spend||0)).map(r => r.error ? `
+        <tr><td>${r.name}</td><td colspan="6" class="err-row">Error: ${r.error}</td></tr>
+      ` : `
+        <tr>
+          <td>${r.name}</td>
+          <td style="font-size:11px;color:var(--gy)">${(r.game||'').split(',')[0].split('+')[0].trim()}</td>
+          <td class="num">${fmtNum(r.subs)}</td>
+          <td class="num">${fmtNum(r.avgViews)}</td>
+          <td class="num">${r.avgEngagement}%</td>
+          <td class="num">${fmtBaht(r.spend)}</td>
+          <td class="num">${fmtBaht(r.costPer1k)}</td>
+        </tr>
+      `).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  document.getElementById('byVerdictContainer').innerHTML = html;
+}
+
+function exportCSV() {
+  const headers = ['idx','name','verdict','game','handle','subs','totalViews','videosChecked','avgViews','avgEngagement','spend','costPer1k','error'];
+  const rows = RESULTS.map(r => headers.map(h => {
+    let v = r[h];
+    if (v === null || v === undefined) v = '';
+    v = String(v).replace(/"/g,'""');
+    if (v.includes(',') || v.includes('\n')) v = `"${v}"`;
+    return v;
+  }).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rms_kol_youtube_stats.csv';
+  a.click();
+}
+</script>
+
+</body>
+</html>
